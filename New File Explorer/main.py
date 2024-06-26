@@ -1,20 +1,24 @@
 import os
 import sys
-from PIL import Image
-from json import load
+import platform
+import subprocess
 from time import sleep
-import customtkinter as ctk
-import subprocess, platform
 from threading import Thread, Lock
+from json import load, loads, dumps, dump
+
+
+#EXTERNAL
+import customtkinter as ctk
 from tkinter.messagebox import showinfo
 from shutil import rmtree, copy, copytree, move
 #from external_modules.cache_system import AppState
-from external_modules.assets64 import dll, file, folder, image, python, txt
+from external_modules.assets64 import (dll_icon, file_icon, folder_icon, 
+                                       image_icon, python_icon, txt_icon,
+                                       desktop_icon)
 from external_modules.utils import base64_to_pil_image
 from external_modules.custommenu import CTkFloatingMenu
+from external_modules.app_state import AppState
 
-import json
-import zstd
 import logging
 from typing import List
 from watchdog.observers import Observer
@@ -28,6 +32,7 @@ CACHE_FILE_PATH = os.path.join(CACHE_DIR, "your_app_name.cache.bin")
 
 # Ensure the cache directory exists
 os.makedirs(CACHE_DIR, exist_ok=True)
+#showinfo = lambda title, message: Thread(target=showinfo, args=(title, message)).start()
 
 
 """
@@ -43,108 +48,6 @@ class CachedPath:
     def __init__(self, file_path, file_type):
         self.file_path = file_path
         self.file_type = file_type
-
-
-    """
-          .o.                                 .oooooo..o     .                 .
-         .888.                               d8P'    `Y8   .o8               .o8
-        .8"888.     oo.ooooo.  oo.ooooo.     Y88bo.      .o888oo  .oooo.   .o888oo  .ooooo.
-       .8' `888.     888' `88b  888' `88b     `"Y8888o.    888   `P  )88b    888   d88' `88b
-      .88ooo8888.    888   888  888   888         `"Y88b   888    .oP"888    888   888ooo888
-     .8'     `888.   888   888  888   888    oo     .d8P   888 . d8(  888    888 . 888    .o
-    o88o     o8888o  888bod8P'  888bod8P'    8""88888P'    "888" `Y888""8o   "888" `Y8bod8P'
-                     888        888
-                    o888o      o888o
-    """
-
-class AppState:
-    def __init__(self):
-        self.system_cache = {}
-
-    def search_files(self, filename: str, dirfirst: bool=False, sortet_by_lenght: bool=False) -> List[str]:
-        results = []
-        for i in range(5):
-            try:
-                for path, cache in self.system_cache.copy().items():
-                    for file_name, cached_paths in cache.copy().items():
-                        for cached_path in cached_paths:
-                            if filename.lower() in cached_path['file_path'].lower().split("\\")[-1]:
-                                if dirfirst and os.path.isdir(cached_path["file_path"]):
-                                    results.insert(0, cached_path["file_path"])
-                                else:
-                                    results.append(cached_path['file_path'])
-                if sortet_by_lenght:
-                    results = sorted(results, key=lambda x: len(x))
-                return results
-            except RuntimeError as e:
-                showinfo("Runtime Error", repr(e))
-                sleep(1)
-
-    def map_filesystem(self, root_path):
-        for root, dirs, files in os.walk(root_path):
-            for name in dirs:
-                path = os.path.join(root, name)
-                self.handle_create(path, 'directory')
-            for name in files:
-                path = os.path.join(root, name)
-                self.handle_create(path, 'file')
-
-    def handle_create(self, path, kind):
-        filename = os.path.basename(path)
-        file_type = "FILE" if kind == 'file' else "DIRECTORY"
-
-        # Check if path exists in system_cache, if not create it
-        if path not in self.system_cache:
-            self.system_cache[path] = {}
-
-        if filename not in self.system_cache[path]:
-            self.system_cache[path][filename] = []
-
-        self.system_cache[path][filename].append(CachedPath(path, file_type).__dict__)
-        logging.debug(f"Handled create: {path}, type: {file_type}")
-
-    def handle_delete(self, path):
-        try:
-            filename = os.path.basename(path)
-            del self.system_cache[path][filename]
-            logging.info(f"Deleted from cache: {path}")
-        except KeyError:
-            logging.warning(f"Attempted to delete non-existing path from cache: {path}")
-
-    def save_to_cache(self):
-        serialized_cache = json.dumps(self.system_cache)
-        compressed_cache = zstd.compress(serialized_cache.encode('utf-8'), 1)
-        with open(CACHE_FILE_PATH, 'wb') as cache_file:
-            cache_file.write(compressed_cache)
-        logging.info("Cache saved to disk")
-
-    """
-    ooooo                                  .o8       .oooooo.                       oooo
-    `888'                                 "888      d8P'  `Y8b                      `888
-     888          .ooooo.   .oooo.    .oooo888     888           .oooo.    .ooooo.   888 .oo.    .ooooo.
-     888         d88' `88b `P  )88b  d88' `888     888          `P  )88b  d88' `"Y8  888P"Y88b  d88' `88b
-     888         888   888  .oP"888  888   888     888           .oP"888  888        888   888  888ooo888
-     888       o 888   888 d8(  888  888   888     `88b    ooo  d8(  888  888   .o8  888   888  888    .o
-    o888ooooood8 `Y8bod8P' `Y888""8o `Y8bod88P"     `Y8bood8P'  `Y888""8o `Y8bod8P' o888o o888o `Y8bod8P'
-
-    """
-
-    def load_system_cache(self):
-        try:
-            with open(CACHE_FILE_PATH, 'rb') as cache_file:
-                compressed_cache = cache_file.read()
-            decompressed_cache = zstd.decompress(compressed_cache).decode('utf-8')
-            self.system_cache = json.loads(decompressed_cache)
-            logging.info("Cache loaded from disk")
-            logging.info(f"Loaded cache content")#: {self.system_cache}")
-            return True
-        except FileNotFoundError:
-            logging.warning("Cache file not found, initializing new cache.")
-            return False
-        except Exception as e:
-            logging.error(f"Failed to deserialize the cache from disk: {e}")
-            return False
-
 
     """
     oooooooooooo          oooooooooooo                                       .
@@ -226,9 +129,15 @@ class Explorer:
         self.DEFAULT_1 = "#4b4b4b"
         self.DEFAULT_2 = "transparent"
 
+        platform_name = sys.platform
+        self.system_platform = "windows" if platform_name.startswith("win") else "linux"
+
         self.copyied_item = False
         self.cutted_item  = False
+        global can_draw
+        can_draw = False
 
+        self.HOME = os.environ.get("USERPROFILE") if self.system_platform == "windows" else os.environ.get("HOME")
         self.EXPLORER_ROOT = os.getcwd()
         if os.path.exists(os.path.join(self.EXPLORER_ROOT, "config", "config.json")):
             self.CONFIG_DICT = load(open(os.path.join(self.EXPLORER_ROOT, "config", "config.json"), "r"))
@@ -245,16 +154,7 @@ class Explorer:
             
 
         self.app_state = app_state
-        #self.app_state.load_system_cache()
-        
-        #def reload_cache():
-        #    while True:
-        #        print("RAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH RELOADING CACHE RAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH")
-        #        self.app_state.load_system_cache()
-        #        sleep(20)
-        
-        #cache_reload_thread = Thread(target=reload_cache, daemon=True)
-        #cache_reload_thread.start()
+
 
         """
         oooooooooooo ooooooooooooo ooooooooo.
@@ -296,10 +196,9 @@ class Explorer:
 
         self.menus: list[CTkFloatingMenu] = []
 
-        current_dirs = os.listdir(os.getcwd())
+        current_dirs = os.listdir()
 
-        platform_name = sys.platform
-        self.system_platform = "windows" if platform_name.startswith("win") else "linux"
+
 
         self.root.geometry(f"{self.window_width}x{self.window_height}")
         self.root.title("File Explorer")
@@ -335,33 +234,34 @@ class Explorer:
         self.scrollable_canvas = self.main_frame._parent_canvas
         self.scrollable_canvas.bind("<Button-3>", lambda x: self.on_right_click_dir(x, self.scrollable_canvas))
 
-        self.ASSETS_FOLDER = f"{self.EXPLORER_ROOT}\\assets\\"
+        #self.ASSETS_FOLDER = os.path.join(self.EXPLORER_ROOT,"assets")
 
-        self.FOLDER_ICON     = base64_to_pil_image(folder, to_ctk_image=True)#suca
-        self.FILE_ICON       = base64_to_pil_image(file,   to_ctk_image=True)
-        self.FILE_TXT_ICON   = base64_to_pil_image(txt,    to_ctk_image=True)
-        self.FILE_PY_ICON    = base64_to_pil_image(python, to_ctk_image=True)
-        self.FILE_IMAGE_ICON = base64_to_pil_image(image,  to_ctk_image=True)
-        self.FILE_DLL_ICON   = base64_to_pil_image(dll,    to_ctk_image=True)
+        self.FOLDER_ICON     = base64_to_pil_image(folder_icon, to_ctk_image=True, resize=(25, 25))#suca
+        self.FILE_ICON       = base64_to_pil_image(file_icon,   to_ctk_image=True, resize=(25, 25))
+        self.FILE_TXT_ICON   = base64_to_pil_image(txt_icon,    to_ctk_image=True, resize=(25, 25))
+        self.FILE_PY_ICON    = base64_to_pil_image(python_icon, to_ctk_image=True, resize=(25, 25))
+        self.FILE_IMAGE_ICON = base64_to_pil_image(image_icon,  to_ctk_image=True, resize=(25, 25))
+        self.FILE_DLL_ICON   = base64_to_pil_image(dll_icon,    to_ctk_image=True, resize=(25, 25))
+        self.DESKTOP_ICON    = base64_to_pil_image(desktop_icon,to_ctk_image=True, resize=(25, 25))
 
         self.EXTENSION2ICON = {
-            "jpg": self.FILE_IMAGE_ICON,
-            "png": self.FILE_IMAGE_ICON,
-            "gif": self.FILE_IMAGE_ICON,
-            "webp": self.FILE_IMAGE_ICON,
-            "tiff": self.FILE_IMAGE_ICON,
-            "psd": self.FILE_IMAGE_ICON,
-            "raw": self.FILE_IMAGE_ICON,
-            "bmp": self.FILE_IMAGE_ICON,
-            "heif": self.FILE_IMAGE_ICON,
-            "indd": self.FILE_IMAGE_ICON,
-            "svg": self.FILE_IMAGE_ICON,
-            "ai": self.FILE_IMAGE_ICON,
-            "eps": self.FILE_IMAGE_ICON,
-            "pdf": self.FILE_IMAGE_ICON,
-            "dll": self.FILE_DLL_ICON,
-            "txt": self.FILE_TXT_ICON,
-            "py": self.FILE_PY_ICON
+            "jpg"  : self.FILE_IMAGE_ICON,
+            "png"  : self.FILE_IMAGE_ICON,
+            "gif"  : self.FILE_IMAGE_ICON,
+            "webp" : self.FILE_IMAGE_ICON,
+            "tiff" : self.FILE_IMAGE_ICON,
+            "psd"  : self.FILE_IMAGE_ICON,
+            "raw"  : self.FILE_IMAGE_ICON,
+            "bmp"  : self.FILE_IMAGE_ICON,
+            "heif" : self.FILE_IMAGE_ICON,
+            "indd" : self.FILE_IMAGE_ICON,
+            "svg"  : self.FILE_IMAGE_ICON,
+            "ai"   : self.FILE_IMAGE_ICON,
+            "eps"  : self.FILE_IMAGE_ICON,
+            "pdf"  : self.FILE_IMAGE_ICON,
+            "dll"  : self.FILE_DLL_ICON,
+            "txt"  : self.FILE_TXT_ICON,
+            "py"   : self.FILE_PY_ICON,
         }
 
         self.draw_dirs(current_dirs)
@@ -374,15 +274,24 @@ class Explorer:
 
 
     def choose_file_icon(self, filename):
+        filename = filename.strip().replace("\x08", "")
         extension = filename.split(".")[-1]
         return self.EXTENSION2ICON.get(extension.lower(), self.FILE_ICON)
 
+    """
     def load_png2tkimage(self, path):
         image = Image.open(path)
         if image.size != (25, 25):
             image = image.resize((25, 25), Image.LANCZOS)
         tk_image = ctk.CTkImage(image)
         return tk_image
+    """
+
+    def uni_path_split(self, string: str) -> list[str]:
+        if self.system_platform == "windows":
+            return string.split("\\")
+        else:
+            return string.split("/")
 
     def sort_dir_file(self, dirs):
         directories = list(filter(os.path.isdir, dirs))
@@ -407,7 +316,7 @@ class Explorer:
     def destroy_all_menus(self, event=None):
         for menu in self.menus:
             try:
-                menu.destroy()
+                menu.destroy_custom()
             except:
                 pass
         self.menus.clear()
@@ -493,25 +402,39 @@ class Explorer:
 
     def clear_main_frame(self):
         for widget in self.main_frame.winfo_children():
-            widget.grid_remove()
+            widget.destroy()
     
 
     def draw_single_dir(self, dirname, index):
         if dirname is None:
             return
+
+        if os.path.isdir(dirname):
+            if os.path.abspath(dirname) == self.HOME:
+                image = self.DESKTOP_ICON
+            else:
+                image = self.FOLDER_ICON
+        else:
+            image = self.choose_file_icon(dirname)
+
         bg_color = self.DEFAULT_2
         new_label = ctk.CTkLabel(self.main_frame, text=dirname, compound="left", bg_color=bg_color, anchor="w",
-                                 image=self.FOLDER_ICON if os.path.isdir(dirname) else self.choose_file_icon(dirname),
+                                 image=image,
                                  font=(self.DEFAULT_FONT_FAMILY, 13))
         new_label.grid(row=index, column=0, sticky="ew")
         new_label.bind("<Double-Button-1>", lambda event, dir_=dirname: self.on_double_click_entry(dir_))
-        new_label.bind("<Button-3>", lambda event, dir_=dirname, widget=new_label: self.on_right_click_dir(event, widget, dir_))
+        new_label.bind("<Button-3>",        lambda event, dir_=dirname, widget=new_label: self.on_right_click_dir(event, widget, dir_))
         new_label.bind("<Enter>", lambda event: new_label.configure(bg_color=self.MARKER_COLOR))
         new_label.bind("<Leave>", lambda event: new_label.configure(bg_color=bg_color))
 
 
     def draw_dirs_filtered(self, filter):
         self.clear_main_frame()
+        global can_draw
+        can_draw = True
+        if not(filter.strip().replace("\x08", "")):
+            self.draw_dirs()
+            return
         #for index, dir_ in enumerate(search_advanced(filter, os.getcwd())):
         elements_found = False
         for index, dir_ in enumerate(elements_found := self.app_state.search_files(filter, True, True)):
@@ -519,12 +442,17 @@ class Explorer:
                 self.draw_single_dir(dir_, index)
                 self.root.update()
                 self.main_frame.update()
+            if not can_draw:
+                return
         
         if not elements_found:
             showinfo("No Result Found", f"No file or directory found with {filter}")
             self.draw_dirs()
 
     def draw_dirs(self, directories: list[str] = None, filter_condition: str = None) -> None:
+        global can_draw
+        can_draw = False
+        self.clear_main_frame()
         """
         params:
             directories:
@@ -533,10 +461,10 @@ class Explorer:
                 file's name and directories's name must have <filter_condition> in their name
         """
 
-        if directories is None:
+        if directories is None or directories == []:
             directories = os.listdir()
 
-        self.clear_main_frame()
+        
 
         self.main_frame._parent_canvas.yview_moveto(0.0)
 
@@ -616,7 +544,7 @@ class Explorer:
         
         elif os.path.isfile(dir_or_file):
             file = dir_or_file
-            path = os.path.abspath(file).split("\\")[:-1]
+            path = self.uni_path_split(file)[:-1]
             os.startfile(path)
 
     """
@@ -684,18 +612,32 @@ class Explorer:
 
 
     def on_double_click_entry(self, dir_: str) -> None:
+        last_path = os.getcwd()
         if os.path.exists(dir_):
             try:
-                if os.path.isdir(dir_):
-                    os.chdir(dir_)
-                if os.path.isfile(dir_):
-                    os.startfile(dir_)
-            except (PermissionError, OSError, IOError) as e:
+                if self.isdir_accessibe(dir_):
+                    if os.path.isdir(dir_):
+                        os.chdir(dir_)
+                        directories = os.listdir()
+                        self.reload_title_entry()
+                        self.draw_dirs(directories)
+                    elif os.path.isfile(dir_):
+                        os.startfile(dir_)
+                else:
+                    raise PermissionError("Extceptional Permission Denied")
+            except (PermissionError, OSError, IOError,) as e:
                 showinfo("Permission Error", repr(e))
+                os.chdir(last_path)
+                directories = os.listdir()
+                self.reload_title_entry()
+                self.draw_dirs(directories)
+                
 
-        directories = os.listdir(os.getcwd())
-        self.reload_title_entry()
-        self.draw_dirs(directories)
+    def isdir_accessibe(self, directory):
+        can_read = os.access(directory, os.R_OK)
+        can_write = os.access(directory, os.W_OK)
+        can_execute = os.access(directory, os.X_OK)
+        return can_read and can_write and can_execute
 
 
     def try_changing_cwd(self, directory: str) -> None:
@@ -704,7 +646,7 @@ class Explorer:
             self.reload_title_entry()
             return
 
-        shells = ["cmd.exe", "cmd", "powershell", "powershell.exe"]
+        shells: list[str] = ["cmd.exe", "cmd", "powershell", "powershell.exe"]
         if directory in shells and self.system_platform == "windows":
             os.system(f"start {directory} {os.getcwd()}")
             self.reload_title_entry()
@@ -773,6 +715,8 @@ def cache_func(app_state, mountpoint):
     try:
         while not stop_cache_thread:
             sleep(45)  # Check filesystem events every 45 seconds
+        else:
+            sys.exit()
     finally:
         observer.stop()
         observer.join()
@@ -783,13 +727,21 @@ def stop_cache_thread_func():
         stop_cache_thread = True
 
 """
-    ooo        ooooo            o8o                 oooooooooooo                                       .    o8o
-    `88.       .888'            `"'                 `888'     `8                                     .o8    `"'
-     888b     d'888   .oooo.   oooo  ooo. .oo.       888         oooo  oooo  ooo. .oo.    .ooooo.  .o888oo oooo   .ooooo.  ooo. .oo.
-     8 Y88. .P  888  `P  )88b  `888  `888P"Y88b      888oooo8    `888  `888  `888P"Y88b  d88' `"Y8   888   `888  d88' `88b `888P"Y88b
-     8  `888'   888   .oP"888   888   888   888      888    "     888   888   888   888  888         888    888  888   888  888   888
-     8    Y     888  d8(  888   888   888   888      888          888   888   888   888  888   .o8   888 .  888  888   888  888   888
-    o8o        o888o `Y888""8o o888o o888o o888o    o888o         `V88V"V8P' o888o o888o `Y8bod8P'   "888" o888o `Y8bod8P' o888o o888o
+    ooo        ooooo            o8o              
+    `88.       .888'            `"'              
+     888b     d'888   .oooo.   oooo  ooo. .oo.   
+     8 Y88. .P  888  `P  )88b  `888  `888P"Y88b  
+     8  `888'   888   .oP"888   888   888   888  
+     8    Y     888  d8(  888   888   888   888  
+    o8o        o888o `Y888""8o o888o o888o o888o
+
+    oooooooooooo                                       .    o8o
+    `888'     `8                                     .o8    `"'
+     888         oooo  oooo  ooo. .oo.    .ooooo.  .o888oo oooo   .ooooo.  ooo. .oo.
+     888oooo8    `888  `888  `888P"Y88b  d88' `"Y8   888   `888  d88' `88b `888P"Y88b
+     888    "     888   888   888   888  888         888    888  888   888  888   888
+     888          888   888   888   888  888   .o8   888 .  888  888   888  888   888
+    o888o         `V88V"V8P' o888o o888o `Y8bod8P'   "888" o888o `Y8bod8P' o888o o888o
 """
 
 def main():
@@ -798,8 +750,11 @@ def main():
     global mountpoint
 
     # Initialize app_state and mountpoint
-    app_state = AppState()
-    mountpoint = "C:\\"  # Set your mountpoint path here
+    app_state = AppState(CACHE_FILE_PATH=CACHE_FILE_PATH, CachedPath=CachedPath)
+    if os.path.exists(os.path.join("config", "config.json")):
+        mountpoint = load(open(os.path.join("config", "config.json"), "r"))["explorer"]["mountpoint"]
+    else:
+        mountpoint = "C:\\" if "win" in platform.system() else "/"  # Set your mountpoint path here
 
     if not app_state.load_system_cache():
         app_state.map_filesystem(mountpoint)
