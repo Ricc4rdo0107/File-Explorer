@@ -1,0 +1,11 @@
+{   
+    "explorer":{
+        "starting_path":"C:\\Users"
+    },
+    "ftp_server":{
+        "port":"21",
+        "username": "root",
+        "password": "12345",
+        "permissions": "elradfmw"
+    }
+}
