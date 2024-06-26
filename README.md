@@ -32,5 +32,3 @@ The default search mode simply filter all the files or directories and shows onl
 
 The second search mode can be activated holding CTRL and right-clicking the search bar and deactivated in the same way, this mode not only shows the absolute path of every file and directory but it checks for every file in the directory tree of the current working directory.
 
-![App Screenshot](https://raw.githubusercontent.com/Ricc4rdo0107/File-Explorer/main/Screenshots/search.gif)
-
