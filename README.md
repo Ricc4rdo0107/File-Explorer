@@ -10,6 +10,11 @@ The Search bar has two modes:
 ## Features
 
 - Cross platform
+- Caching System
+- Copy File/Directory
+- Cut File/Directory
+- Paste File/Directory
+- FTP Server
 - Create new file
 - Create new directory
 - Open folder in system file explorer
