@@ -24,11 +24,11 @@ class CTkFloatingMenu(ctk.CTkToplevel):
         #self.attributes("-transparentcolor", self["bg"])  # Make the background color transparent
         #self.bind("<Leave>",    self.on_focus_out)
 
-    def destroy(self):
+    def destroy_custom(self):
         return add_function(self.on_death)(super().destroy) if self.on_death else super().destroy()
 
     def on_focus_out(self, event):
-        self.destroy()
+        self.destroy_custom()
 
     def quit_and_execute(self, function: Callable):
         self.destroy()
