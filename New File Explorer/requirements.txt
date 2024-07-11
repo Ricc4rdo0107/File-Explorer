@@ -1,4 +1,7 @@
-customtkinter
-tkinter
-pyftpdlib
-watchdog
+customtkinter==5.2.2
+darkdetect==0.8.0
+packaging==24.1
+pillow==10.4.0
+pyftpdlib==1.5.10
+watchdog==4.0.1
+zstd==1.5.5.1
