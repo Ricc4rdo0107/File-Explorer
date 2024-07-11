@@ -1,5 +1,5 @@
 from tkinter.messagebox import showinfo
-from json import dump, loads, dumps
+from json import loads, dumps
 from typing import List
 from time import sleep
 import logging
@@ -8,6 +8,22 @@ import os
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+
+"""
+      .oooooo.                       oooo                        .o8     ooooooooo.                 .   oooo
+     d8P'  `Y8b                      `888                       "888     `888   `Y88.             .o8   `888
+    888           .oooo.    .ooooo.   888 .oo.    .ooooo.   .oooo888      888   .d88'  .oooo.   .o888oo  888 .oo.
+    888          `P  )88b  d88' `"Y8  888P"Y88b  d88' `88b d88' `888      888ooo88P'  `P  )88b    888    888P"Y88b
+    888           .oP"888  888        888   888  888ooo888 888   888      888          .oP"888    888    888   888
+    `88b    ooo  d8(  888  888   .o8  888   888  888    .o 888   888      888         d8(  888    888 .  888   888
+     `Y8bood8P'  `Y888""8o `Y8bod8P' o888o o888o `Y8bod8P' `Y8bod88P"    o888o        `Y888""8o   "888" o888o o888o
+"""
+class CachedPath:
+    def __init__(self, file_path, file_type):
+        self.file_path = file_path
+        self.file_type = file_type
+
 
 """
           .o.                                 .oooooo..o     .                 .
@@ -22,25 +38,29 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 """
 
 class AppState:
-    def __init__(self, CACHE_FILE_PATH, CachedPath):
-        self.system_cache = {}
+    def __init__(self, CACHE_FILE_PATH: str, CachedPath: CachedPath):
+        self.system_cache: dict = {}
         self.CACHE_FILE_PATH = CACHE_FILE_PATH
         self.CachedPath = CachedPath
 
-    def search_files(self, filename: str, dirfirst: bool=False, sortet_by_lenght: bool=False) -> List[str]:
+    def search_files(self, filename: str, dirfirst: bool=False, sortet_by_lenght: bool=False, exclude_dirs: bool= False) -> List[str]:
         results = []
         if not filename:
             return results
+        # Ma perché puttana eva - ergo: Ci sono volute 15 ore
         for i in range(5):
             try:
                 for path, cache in self.system_cache.copy().items():
                     for file_name, cached_paths in cache.copy().items():
                         for cached_path in cached_paths:
                             if filename.lower() in cached_path['file_path'].lower().split("\\")[-1]:
+                                if os.path.isdir(filename) and exclude_dirs:
+                                    continue
                                 if dirfirst and os.path.isdir(cached_path["file_path"]):
                                     results.insert(0, cached_path["file_path"])
                                 else:
                                     results.append(cached_path['file_path'])
+
                 if sortet_by_lenght:
                     results = sorted(results, key=lambda x: len(x))
                 return results
@@ -56,6 +76,7 @@ class AppState:
             for name in files:
                 path = os.path.join(root, name)
                 self.handle_create(path, 'file')
+        self.save_to_cache()
 
     def handle_create(self, path, kind):
         filename = os.path.basename(path)

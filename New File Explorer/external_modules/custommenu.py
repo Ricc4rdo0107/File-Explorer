@@ -1,6 +1,17 @@
 from typing import Callable
 import customtkinter as ctk
-from external_modules.utils import add_function
+#from utils import add_function
+
+def add_function(function_before: Callable=None, function_after: Callable=None):
+    def wrapper(function: Callable): 
+        res_before = res_after = None
+        if function_before:
+            res_before = function_before()
+        res = function()
+        if function_after:
+            res_after = function_after()
+        return res_before, res, res_after
+    return wrapper
 
 class CTkFloatingMenu(ctk.CTkToplevel):
     def __init__(self, master, winsize: tuple=(100,140), on_death:Callable=None, *args, **kwargs):
@@ -19,10 +30,6 @@ class CTkFloatingMenu(ctk.CTkToplevel):
         self.BigFrame.grid(row=0, column=0, sticky="nsew")
         self.buttons = []
         self.bind("<FocusOut>", self.on_focus_out)
-        self.geometry("%dx%d" % self.winsize)
-        #self.attributes("-alpha", 0.5)  # Set transparency level (0.0 to 1.0)
-        #self.attributes("-transparentcolor", self["bg"])  # Make the background color transparent
-        #self.bind("<Leave>",    self.on_focus_out)
 
     def destroy_custom(self):
         return add_function(self.on_death)(super().destroy) if self.on_death else super().destroy()
@@ -42,5 +49,6 @@ class CTkFloatingMenu(ctk.CTkToplevel):
         return text
         
     def popup(self, x, y):
+        self.winsize = (150, 32*len(self.buttons))
         self.geometry(f"{self.winsize[0]}x{self.winsize[1]-20}+{x}+{y}")
         self.mainloop()

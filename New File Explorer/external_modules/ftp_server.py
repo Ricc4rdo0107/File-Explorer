@@ -1,10 +1,13 @@
 import sys
+import logging
 from pyftpdlib.authorizers import DummyAuthorizer
 from pyftpdlib.handlers import FTPHandler
 from pyftpdlib.servers import FTPServer
 
-def start_ftp_server(directory, username, password, permissions="elradfmw"):
-    authorizer = DummyAuthorizer()
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+
+def start_ftp_server(host: str, port: int, directory: str, username: str, password: str, permissions: str="elradfmw"):
     """
     params:
         permissions:
@@ -19,15 +22,20 @@ def start_ftp_server(directory, username, password, permissions="elradfmw"):
         "M": Change file mode/permission (SITE CHMOD command)
         "T": Change file modification time (MFMT command)
     """
-    authorizer.add_user(username, password, directory, perm=permissions)
-    handler = FTPHandler
-    handler.authorizer = authorizer
-    handler.banner = "Welcome to my FTP server."
-
-    address = ("0.0.0.0", 21)
-    server = FTPServer(address, handler)
-
-    server.serve_forever()
+    try:
+        logging.info(f"FTP_SERVER STARTED:\nAddress: {host}:{port}\nDirectory:{directory}"\
+                     f"Username: {username}\nPassword: {'*' * len(password)}\nPermissions:{permissions}")
+        authorizer = DummyAuthorizer()
+        authorizer.add_user(username, password, directory, perm=permissions)
+        handler = FTPHandler
+        handler.authorizer = authorizer
+        handler.banner = "Welcome to my FTP server."
+        address = (host, port)
+        server = FTPServer(address, handler)
+        server.serve_forever()
+    except Exception as e:
+        with open("ftp_server_error_log.txt", "w") as error_log:
+            error_log.write(str(e.with_traceback(None)))
 
 if __name__ == "__main__":
     start_ftp_server(*[ arg for arg in sys.argv[1:]])

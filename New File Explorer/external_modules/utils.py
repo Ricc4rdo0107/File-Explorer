@@ -4,11 +4,13 @@ from customtkinter import CTkImage
 from PIL import Image
 import base64
 from io import BytesIO
-#from assets64 import dll
 
-def base64_to_pil_image(base64_str, to_ctk_image=False):
+
+def base64_to_pil_image(base64_str: bytes, resize:tuple =None, to_ctk_image: bool=False) -> CTkImage|Image.Image:
     image_data = base64.b64decode(base64_str)
     image = Image.open(BytesIO(image_data))
+    if resize:
+        image.resize(resize, Image.LANCZOS)
     if to_ctk_image:
         image = CTkImage(image)
     return image
