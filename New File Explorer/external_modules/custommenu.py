@@ -20,6 +20,8 @@ class CTkFloatingMenu(ctk.CTkToplevel):
         self.winsize = winsize
         self.overrideredirect(1)
 
+        self.screensize: tuple[int, int]= (self.master.winfo_screenwidth(), self.master.winfo_screenheight())
+
         self.on_death = on_death
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
@@ -44,11 +46,24 @@ class CTkFloatingMenu(ctk.CTkToplevel):
     def add_option(self, text, command) -> None:
         button = ctk.CTkButton(self.BigFrame, text=text, fg_color="#2b2b2b", hover_color="#3d3d3d",  border_color="black")
         button.pack(fill="x")
-        button.bind("<Button-1>", command=lambda x=None: self.quit_and_execute(command))#Uccidetemi
+        button.bind("<Button-1>", command=lambda x=None: self.quit_and_execute(command))
         self.buttons.append(button)
         return text
         
     def popup(self, x, y):
         self.winsize = (150, 32*len(self.buttons))
+
+        if y > self.screensize[1]-self.winsize[1]:
+            y-=self.winsize[1]
+
+        elif y <= self.winsize[1]:
+            y += self.winsize[1]/2
+
+        elif x <= self.winsize[0]:
+            x += self.winsize[0]/2
+
+        elif x > self.screensize[0]-self.winsize[0]:
+            x-=self.winsize[0]
+
         self.geometry(f"{self.winsize[0]}x{self.winsize[1]-20}+{x}+{y}")
         self.mainloop()

@@ -4,10 +4,9 @@ import ctypes
 import platform
 import subprocess
 import tkinter as tk
-from time import sleep
 from threading import Thread, Lock
-from json import load, loads, dumps, dump
-
+from json import load, dumps, dump
+from time import sleep, perf_counter
 """
 TODO: aggiungere trascinamento icone
 """
@@ -23,9 +22,9 @@ from external_modules.assets64 import (dll_icon, file_icon, folder_icon,
                                        image_icon, python_icon, txt_icon,
                                        home_icon, exe_icon, desktop_icon,
                                        zip_icon, rar_icon, right_arrow_icon)
+from external_modules.utils import base64_to_pil_image
 from external_modules.custommenu import CTkFloatingMenu
 from external_modules.app_state import AppState, CachedPath
-from external_modules.utils import base64_to_pil_image
 
 
 import logging
@@ -317,7 +316,7 @@ class Explorer:
 
         self.draw_dirs(current_dirs)
         self.root.protocol("WM_DELETE_WINDOW", self.on_exit)
-        self.root.grab_set()
+        self.root.grab_set()    #Set the window on top
         self.root.grab_release()
         self.root.mainloop()
 
@@ -555,18 +554,15 @@ class Explorer:
 
         self.main_frame._parent_canvas.yview_moveto(0.0)
 
-        if filter_condition:
-            filter_condition = filter_condition.strip().replace("\x08", "")
-
         if not(filter_condition is None or filter_condition.isspace()) and filter_condition:
-            directories = filter(lambda x: filter_condition.lower() in x.lower(), directories[::])
+            directories = list(filter(lambda x: filter_condition.lower() in x.lower(), directories[::]))
         
         if not(bool(self.show_hidden_checkbox.get())):
-            # Directories = filter(lambda x: not(self.checkifishidden(os.path.abspath(x))), directories)
+            directories = list(filter(lambda x: not(self.checkifishidden(os.path.abspath(x))), directories))
             # ma perché cazzo non funziona con il filtro.. boh
-            for dir in list(directories)[::]:
-                if self.checkifishidden(os.path.abspath(dir)):
-                    directories.remove(dir)
+            #for dir in list(directories)[::]:
+            #    if self.checkifishidden(os.path.abspath(dir)):
+            #        directories.remove(dir)
 
         # Prende tutti i file che non sono nascosti se la checkbox è disattivata altrimenti se lo pija al culo co tutti porca troia
 
@@ -614,7 +610,6 @@ class Explorer:
     o888o        o888o o888o `Y8bod8P'     `Y8bood8P'  o888o
     """
 
-    
     def paste(self, dir, copyied=None, cutted=None):
         assert bool(self.copyied_item) != bool(self.cutted_item), f"{bool(self.copyied_item)} != {bool(self.cutted_item)}"
         if self.copyied_item:
@@ -628,6 +623,7 @@ class Explorer:
         elif self.cutted_item:
             self.copyied_item = None
             move(self.cutted_item, dir)
+        self.draw_dirs(dir)
 
 
     def copy_selected(self, directory):
@@ -676,44 +672,24 @@ class Explorer:
         
         if widget_is_label := isinstance(widget, ctk.CTkLabel):
             widget.configure(bg_color=self.MARKER_COLOR)
+
         self.menus.append(menu)
-        options = [
-            menu.add_option("New Folder",              command = lambda: self.new_dir(self.popupInput("Enter the New Folder's name", "New Folder"))),
-            menu.add_option("New Text File",           command = lambda: self.new_file(self.popupInput("Enter New File's name", "New Text File"))),
-            menu.add_option("Open in System Explorer", command = lambda: self.openInIntegratedExplorer(directory if widget_is_label else os.getcwd())),
-            menu.add_option("Open Terminal Here",      command = lambda: self.open_terminal_in_directory(directory if widget_is_label else os.getcwd())),
-            menu.add_option("Bind FTP Server Here",    command = lambda: self.ftp_server(os.getcwd())),
-        ]
+        
+        menu.add_option("New Folder",              command = lambda: self.new_dir(self.popupInput("Enter the New Folder's name", "New Folder"))),
+        menu.add_option("New Text File",           command = lambda: self.new_file(self.popupInput("Enter New File's name", "New Text File"))),
+        menu.add_option("Open in System Explorer", command = lambda: self.openInIntegratedExplorer(directory if widget_is_label else os.getcwd())),
+        menu.add_option("Open Terminal Here",      command = lambda: self.open_terminal_in_directory(directory if widget_is_label else os.getcwd())),
+        menu.add_option("Bind FTP Server Here",    command = lambda: self.ftp_server(os.getcwd())),
         
         if widget_is_label:
-            options.append(menu.add_option("Cut",  command = lambda: self.cut_selected(directory)))
-            options.append(menu.add_option("Copy", command = lambda: self.copy_selected(directory)))
+            menu.add_option("Cut",  command = lambda: self.cut_selected(directory))
+            menu.add_option("Copy", command = lambda: self.copy_selected(directory))
+            
+        menu.add_option("Paste",  command = lambda dir_=os.getcwd(): self.paste(dir_))
         
         if not (directory is None) and not(".." in directory) and widget_is_label:
-            options.insert(
-                options.index("Copy"),
-                menu.add_option("Delete", command =lambda: self.delete_file_or_dir(directory))
-            )
-        options.insert(
-                0,
-                menu.add_option("Paste", command=lambda dir_=os.getcwd(): self.paste(dir_) )
-            )
-        """
-        if self.copyied_item:
-            options.insert(
-                0,
-                menu.add_option("Paste", command = lambda dir=os.getcwd(): self.paste(dir=dir, copyied=True))
-            )
+            menu.add_option("Delete", command = lambda: self.delete_file_or_dir(directory))        
 
-        elif self.cutted_item:
-            options.insert(
-                0,
-                menu.add_option("Paste", command = lambda dir=os.getcwd(): self.paste(dir=dir, cutted=True))
-            )
-        """
-
-        #menu.winsize = (150, 32*len(options))
-        
         menu.popup(x, y)
         self.destroy_all_menus()
 
@@ -748,7 +724,6 @@ class Explorer:
 
 
     def try_changing_cwd(self, directory: str) -> None:
-        # The directory is alredy stripped
         if not(directory) or directory.isspace() or not(directory.replace("\x08", "")):
             self.reload_title_entry()
             return
@@ -820,8 +795,10 @@ def cache_func(app_state, mountpoint):
     observer.start()
 
     try:
+        timeout = 45
+        #start = perf_counter()
         while not stop_cache_thread:
-            sleep(45)  # Check filesystem events every 45 seconds
+            sleep(timeout)
         else:
             sys.exit()
     finally:
