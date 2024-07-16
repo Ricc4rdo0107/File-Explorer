@@ -4,9 +4,10 @@ import ctypes
 import platform
 import subprocess
 import tkinter as tk
+from json import load
+from time import sleep
 from threading import Thread, Lock
-from json import load, dumps, dump
-from time import sleep, perf_counter
+
 """
 TODO: aggiungere trascinamento icone
 """
@@ -22,17 +23,15 @@ from external_modules.assets64 import (dll_icon, file_icon, folder_icon,
                                        image_icon, python_icon, txt_icon,
                                        home_icon, exe_icon, desktop_icon,
                                        zip_icon, rar_icon, right_arrow_icon)
-from external_modules.utils import base64_to_pil_image
-from external_modules.custommenu import CTkFloatingMenu
 from external_modules.app_state import AppState, CachedPath
-
+from external_modules.utils import base64_to_pil_image, get_disk_info
+from external_modules.customwidgets import CTkFloatingMenu, CTkInputPopup
 
 import logging
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileDeletedEvent, FileMovedEvent
+from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileDeletedEvent
 
 
-#EXPLORER_ROOT= "\\".join(os.path.abspath(__file__).split("\\")[:-1])
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache")
 CACHE_FILE_PATH = os.path.join(CACHE_DIR, "file_explorer_cache.bin")
@@ -132,6 +131,9 @@ class Explorer:
 
         self.HOME = os.environ.get("USERPROFILE") if self.system_platform == "windows" else os.environ.get("HOME")
         self.EXPLORER_ROOT = os.getcwd()
+
+        ctk.set_appearance_mode("Dark")  # Modes: "System" (standard), "Dark", "Light"
+
         if os.path.exists(os.path.join(self.EXPLORER_ROOT, "config", "config.json")):
             self.CONFIG_DICT = load(open(os.path.join(self.EXPLORER_ROOT, "config", "config.json"), "r"))
             self.config_exists = True
@@ -225,6 +227,9 @@ class Explorer:
         self.show_hidden_checkbox = ctk.CTkCheckBox(self.toolsFrame, text="Show Hidden",
                                                     variable=show_hidden, onvalue=True, offvalue=False, 
                                                     command=lambda x=None: self.draw_dirs([ x for x in os.listdir() ]))
+        
+        self.got_to_disks = ctk.CTkButton(self.toolsFrame, text="Go To Disks", command=self.display_disks)
+
         
         global isToolsLabelUp
         isToolsLabelUp = True
@@ -325,9 +330,11 @@ class Explorer:
         isToolsLabelUp = not(isToolsLabelUp)
         if isToolsLabelUp:
             self.show_hidden_checkbox.grid_remove()
+            self.got_to_disks.grid_remove()
             self.openToolsLabel.configure(image=self.DOWN_ARROW_ICON)
         else:
             self.show_hidden_checkbox.grid(row=0, column=0, sticky="nsew")
+            self.got_to_disks.grid(row=0, column=1, sticky="nsew")
             self.openToolsLabel.configure(image=self.UP_ARROW_ICON)
 
     def on_exit(self, *args):
@@ -388,11 +395,7 @@ class Explorer:
         
 
     def popupInput(self, title, main_label) -> str:
-        dialog = ctk.CTkInputDialog(title=title, text=main_label)
-        x = self.root.winfo_screenwidth()  / 2
-        y = self.root.winfo_screenheight() / 2
-        dialog.geometry("%d+%d"%(x, y))
-        dialog.overrideredirect(1)
+        dialog = CTkInputPopup(title=title, text=main_label, centered=True)
         res = dialog.get_input()
         return res
     
@@ -559,12 +562,6 @@ class Explorer:
         
         if not(bool(self.show_hidden_checkbox.get())):
             directories = list(filter(lambda x: not(self.checkifishidden(os.path.abspath(x))), directories))
-            # ma perché cazzo non funziona con il filtro.. boh
-            #for dir in list(directories)[::]:
-            #    if self.checkifishidden(os.path.abspath(dir)):
-            #        directories.remove(dir)
-
-        # Prende tutti i file che non sono nascosti se la checkbox è disattivata altrimenti se lo pija al culo co tutti porca troia
 
         directories = self.sort_dir_file(directories)
 
@@ -693,9 +690,41 @@ class Explorer:
         menu.popup(x, y)
         self.destroy_all_menus()
 
+    def draw_single_disk(self, disk:dict, index):
+        disk_name  = disk["disk_name"]
+        tot_size   = disk["tot_size"]
+        used       = disk["used"]
+        free       = disk["free"][:3]
+        percentage = float(disk["percentage"])/100
 
-    def on_double_click_entry(self, dir_: str) -> None:
+        disk_frame = ctk.CTkFrame(self.main_frame, border_color="black", border_width=3)
+        disk_frame.bind("<Double-Button-1>", lambda x=None: self.on_double_click_entry(disk_name, checklastdot=False))
+
+        disk_name_label = ctk.CTkLabel(disk_frame, text=f"{disk_name}\nFree: {free}/{tot_size}", anchor="w")
+        disk_name_label.grid(row=0, column=0, padx=12, pady=12)
+
+        disk_percentage_bar = ctk.CTkProgressBar(disk_frame)
+        disk_percentage_bar.set(percentage)
+        disk_percentage_bar.grid(row=2, column=0, padx=12, pady=(0, 12))
+
+        disk_frame.grid(row=index, column=0, sticky="w")
+
+    def display_disks(self):
+        self.destroy_all_menus()
+        self.clear_main_frame()
+        disk_info = get_disk_info()
+
+        for index, disk in enumerate(disk_info):
+            self.draw_single_disk(disk, index)
+
+
+
+    def on_double_click_entry(self, dir_: str, checklastdot: bool=True) -> None:
         last_path = os.getcwd()
+        if dir_ == ".." and checklastdot:
+            if os.path.abspath("..") == os.getcwd():
+                self.display_disks()
+                return
         if os.path.exists(dir_):
             try:
                 if self.isdir_accessibe(dir_):
@@ -849,8 +878,6 @@ def main():
     cache_thread = Thread(target=cache_func, args=(app_state, mountpoint,))
     cache_thread.start()
 
-    # Wait for cache_thread to complete
-    # sono tutto english io
     cache_thread.join()
 
 if __name__ == "__main__":

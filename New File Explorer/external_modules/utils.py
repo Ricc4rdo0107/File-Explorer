@@ -1,10 +1,44 @@
-from typing import Callable
 import os
-from customtkinter import CTkImage
-from PIL import Image
+import shutil
 import base64
+import platform
+from PIL import Image
 from io import BytesIO
+from typing import Callable
+from customtkinter import CTkImage
 
+def get_disk_info() -> list[dict]:
+    disk_info = []
+    if platform.system() == 'Windows':
+        for disk in ['%s:' % d for d in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ']:
+            try:
+                total, used, free = shutil.disk_usage(disk)
+                disk_info.append({
+                    "disk_name": disk,
+                    "tot_size": f"{total / (1024.0 ** 3):.2f} GB",
+                    "used": f"{used / (1024.0 ** 3):.2f} GB",
+                    "free": f"{free / (1024.0 ** 3):.2f} GB",
+                    "percentage": f"{(used / total) * 100:.2f}"
+                })
+            except OSError:
+                continue
+    else:
+        for disk in ['/']:
+            try:
+                st = os.statvfs(disk)
+                total = st.f_frsize * st.f_blocks
+                free = st.f_frsize * st.f_bavail
+                used = total - free
+                disk_info.append({
+                    "disk_name": disk,
+                    "tot_size": f"{total / (1024.0 ** 3):.2f} GB",
+                    "used": f"{used / (1024.0 ** 3):.2f} GB",
+                    "free": f"{free / (1024.0 ** 3):.2f} GB",
+                    "percentage": f"{(used / total) * 100:.2f}%"
+                })
+            except OSError:
+                continue
+    return disk_info
 
 def base64_to_pil_image(base64_str: bytes, resize:tuple =None, to_ctk_image: bool=False) -> CTkImage|Image.Image:
     image_data = base64.b64decode(base64_str)
