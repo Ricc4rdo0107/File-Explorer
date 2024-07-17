@@ -1,14 +1,19 @@
 # File-Explorer
 
 Simple File Explorer
-Should work on all platforms (tested only on windows)
 
 The Search bar has two modes:
     the default mode:
         just filters all the file and directories in the current working directory
-    the advanced mode:
+    the global mode:
+        searches in the cache all the files or directories who contains the keyword
 ## Features
 
+- Open Files
+- Drag And Drop(for now only drop inside this program)
+- Hiding "hidden" files
+- Custom Icons
+- Drive/Disk Info
 - Cross platform
 - Caching System
 - Copy File/Directory
@@ -19,9 +24,7 @@ The Search bar has two modes:
 - Create new directory
 - Open folder in system file explorer
 - Open folder in system terminal/terminal emulator
-- Two file search algoritms
-
-
+- Caching system
 
 
 
