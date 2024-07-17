@@ -8,24 +8,21 @@ from json import load
 from time import sleep
 from threading import Thread, Lock
 
-"""
-TODO: aggiungere trascinamento icone
-"""
 
 #EXTERNAL
-import PIL
-import PIL.Image
 import customtkinter as ctk
 from tkinter import BooleanVar
+from tkinterdnd2 import DND_ALL
 from tkinter.messagebox import showinfo
 from shutil import rmtree, copy, copytree, move
 from external_modules.assets64 import (dll_icon, file_icon, folder_icon, 
                                        image_icon, python_icon, txt_icon,
                                        home_icon, exe_icon, desktop_icon,
-                                       zip_icon, rar_icon, right_arrow_icon)
+                                       zip_icon, rar_icon, json_icon,
+                                       c_lang_icon, cpp_icon, csharp_icon)
 from external_modules.app_state import AppState, CachedPath
 from external_modules.utils import base64_to_pil_image, get_disk_info
-from external_modules.customwidgets import CTkFloatingMenu, CTkInputPopup
+from external_modules.customwidgets import CTkFloatingMenu, CTkInputPopup, CTkArrowOpeningMenu, CTkDND
 
 import logging
 from watchdog.observers import Observer
@@ -146,10 +143,7 @@ class Explorer:
             STARTING_PATH = os.getcwd()
         os.chdir(STARTING_PATH)
         self.STARTING_PATH = STARTING_PATH
-            
-
         self.app_state = app_state
-
 
         """
         oooooooooooo ooooooooooooo ooooooooo.
@@ -190,7 +184,8 @@ class Explorer:
             self.FTP_PASSWORD    = "1234"
             self.FTP_PERMISSION  = "elradfmw"
 
-        self.root = ctk.CTk()
+        #self.root = ctk.CTk()
+        self.root = CTkDND()
         self.window_width = 700
         self.window_height = 700
 
@@ -216,36 +211,46 @@ class Explorer:
         SEARCH_FRAME = (1, 0)
         MAIN_FRAME   = (2, 0)
 
+        #TOOLS
         self.toolsFrame = ctk.CTkFrame(self.root, height=0)
         self.toolsFrame.grid(row=TOOLS_FRAME[0], column=TOOLS_FRAME[1], sticky="nsew", padx=10, pady=10)
         self.toolsFrame.grid_columnconfigure(0, weight=1)
         self.toolsFrame.grid_rowconfigure(0, weight=1)
         self.toolsFrame.grid_rowconfigure(1, weight=1)
 
+        # ARROW OPENING MENU
+        self.arrow_menu = CTkArrowOpeningMenu(self.toolsFrame)
+        self.arrow_menu.grid(row=1, column=0, sticky="nsew")
+
+
+        # SHOW HIDDEN CHECKBOX
         global show_hidden
         show_hidden = BooleanVar(value=False)
-        self.show_hidden_checkbox = ctk.CTkCheckBox(self.toolsFrame, text="Show Hidden",
-                                                    variable=show_hidden, onvalue=True, offvalue=False, 
+        self.show_hidden_checkbox = ctk.CTkCheckBox(self.arrow_menu.widgetsFrame, text="Show Hidden",
+                                                    variable=show_hidden, onvalue=True, offvalue=False,
                                                     command=lambda x=None: self.draw_dirs([ x for x in os.listdir() ]))
+        self.show_hidden_checkbox.grid(row=0, column=0, pady=12, padx=12)
         
-        self.got_to_disks = ctk.CTkButton(self.toolsFrame, text="Go To Disks", command=self.display_disks)
+        # DRIVES DISPLAYER
+        self.display_disks_button = ctk.CTkButton(self.arrow_menu.widgetsFrame, bg_color="transparent",
+                                                text="Display Drives", command=self.display_disks)
+        self.display_disks_button.grid(row=0, column=1, pady=12, padx=12)
 
-        
-        global isToolsLabelUp
-        isToolsLabelUp = True
-        self.openToolsLabel = ctk.CTkLabel(self.toolsFrame, text="")
-        self.openToolsLabel.grid(row=1, column=0, sticky="nsew")
-        self.openToolsLabel.bind("<Button-1>", command=lambda event: self.switch_tools_label_mode())
-        #adding arrow image after updating the root window because tkinter works like this
+        self.switch_search_mode_button = ctk.CTkButton(self.arrow_menu.widgetsFrame, text="Switch Search Mode",
+                                                       command=self.switch_search_mode)
+        self.switch_search_mode_button.grid(row=0, column=2, padx=12, pady=12)
 
+        # BARS FRAME
         self.search_frame = ctk.CTkFrame(self.root)
         self.search_frame.grid(row=SEARCH_FRAME[0], column=SEARCH_FRAME[1], sticky="nsew", padx=10, pady=10)
 
+        # PATH DISPLAYER
         self.current_directory_entry = ctk.CTkEntry(self.search_frame, font=(self.DEFAULT_FONT_FAMILY, 13), width=300)
         self.current_directory_entry.pack(padx=(10, 5), pady=12, fill="x", side="left", expand=True)
         self.current_directory_entry.bind("<Return>", lambda x: self.try_changing_cwd(self.current_directory_entry.get().strip()))
         self.reload_title_entry()
 
+        # SEARCH
         global advanced_search_mode
         advanced_search_mode = False
         self.searchEntry = ctk.CTkEntry(self.search_frame, font=(self.DEFAULT_FONT_FAMILY, 13), placeholder_text="Search..")
@@ -260,7 +265,9 @@ class Explorer:
         self.scrollable_canvas = self.main_frame._parent_canvas
         self.scrollable_canvas.bind("<Button-3>", lambda x: self.on_right_click_dir(x, self.scrollable_canvas))
 
-        #self.ASSETS_FOLDER = os.path.join(self.EXPLORER_ROOT,"assets")
+        self.scrollable_canvas.drop_target_register(DND_ALL)
+        self.scrollable_canvas.dnd_bind("<<Drop>>", self.dnd_paste)
+
         icon_size = (25, 25)
 
         """
@@ -275,7 +282,7 @@ class Explorer:
                                           "Y88888P'
         """
 
-        #Explorer Icons for extensions of files or folders
+        # Explorer Icons for extensions of files or folders
         self.FOLDER_ICON     = base64_to_pil_image(folder_icon,  to_ctk_image=True, resize=icon_size)
         self.FILE_ICON       = base64_to_pil_image(file_icon,    to_ctk_image=True, resize=icon_size)
         self.FILE_TXT_ICON   = base64_to_pil_image(txt_icon,     to_ctk_image=True, resize=icon_size)
@@ -287,15 +294,12 @@ class Explorer:
         self.DESKTOP_ICON    = base64_to_pil_image(desktop_icon, to_ctk_image=True, resize=icon_size)
         self.ZIP_ICON        = base64_to_pil_image(zip_icon,     to_ctk_image=True, resize=icon_size)
         self.RAR_ICON        = base64_to_pil_image(rar_icon,     to_ctk_image=True, resize=icon_size)
+        self.JSON_ICON       = base64_to_pil_image(json_icon,    to_ctk_image=True, resize=icon_size)
+        self.C_ICON          = base64_to_pil_image(c_lang_icon,  to_ctk_image=True, resize=icon_size)
+        self.CPP_ICON        = base64_to_pil_image(cpp_icon,     to_ctk_image=True, resize=icon_size)
+        self.CS_ICON          = base64_to_pil_image(csharp_icon,  to_ctk_image=True, resize=icon_size)
 
-        #Arrows
-        self.RIGHT_ARROW_ICON  = base64_to_pil_image(right_arrow_icon, resize=(50,50))
-        self.UP_ARROW_ICON     = ctk.CTkImage(self.RIGHT_ARROW_ICON.rotate(90, PIL.Image.NEAREST, expand=1))
-        self.DOWN_ARROW_ICON   = ctk.CTkImage(self.RIGHT_ARROW_ICON.rotate(270, PIL.Image.NEAREST, expand=1))
-
-        self.openToolsLabel.configure(image=self.DOWN_ARROW_ICON)
-
-        #che merdaio
+        # Che merdaio
         self.EXTENSION2ICON = {
             "jpg"  : self.FILE_IMAGE_ICON,
             "png"  : self.FILE_IMAGE_ICON,
@@ -314,28 +318,33 @@ class Explorer:
             "dll"  : self.FILE_DLL_ICON,
             "txt"  : self.FILE_TXT_ICON,
             "py"   : self.FILE_PY_ICON,
+            "json" : self.JSON_ICON,
             "exe"  : self.EXE_ICON,
             "zip"  : self.ZIP_ICON,
+            "7z"   : self.ZIP_ICON,
             "rar"  : self.RAR_ICON,
+            "c"    : self.C_ICON,
+            "cpp"  : self.CPP_ICON,
+            "cs"   : self.CS_ICON
         }
 
         self.draw_dirs(current_dirs)
         self.root.protocol("WM_DELETE_WINDOW", self.on_exit)
-        self.root.grab_set()    #Set the window on top
-        self.root.grab_release()
+        self.root.lift()
         self.root.mainloop()
 
-    def switch_tools_label_mode(self):
-        global isToolsLabelUp
-        isToolsLabelUp = not(isToolsLabelUp)
-        if isToolsLabelUp:
-            self.show_hidden_checkbox.grid_remove()
-            self.got_to_disks.grid_remove()
-            self.openToolsLabel.configure(image=self.DOWN_ARROW_ICON)
-        else:
-            self.show_hidden_checkbox.grid(row=0, column=0, sticky="nsew")
-            self.got_to_disks.grid(row=0, column=1, sticky="nsew")
-            self.openToolsLabel.configure(image=self.UP_ARROW_ICON)
+    def dnd_paste(self, event):
+        abspath = event.data
+        name = os.path.split(abspath)[1]
+        dst = os.getcwd()
+        print(f"I WANT TO MOVE {abspath} TO {os.path.join(dst, name)}")
+        if os.name == "nt":#Windows
+            abspath = abspath.replace("/", "\\")
+        try:
+            move(abspath, os.path.join(dst, name))
+        except PermissionError as e:
+            showinfo("Permission Error", e)
+        self.draw_dirs()
 
     def on_exit(self, *args):
         self.root.destroy()
@@ -346,15 +355,6 @@ class Explorer:
         filename = filename.strip().replace("\x08", "")
         extension = filename.split(".")[-1]
         return self.EXTENSION2ICON.get(extension.lower(), self.FILE_ICON)
-
-    """
-    def load_png2tkimage(self, path):
-        image = Image.open(path)
-        if image.size != (25, 25):
-            image = image.resize((25, 25), Image.LANCZOS)
-        tk_image = ctk.CTkImage(image)
-        return tk_image
-    """
 
     def uni_path_split(self, string: str) -> list[str]:
         if self.system_platform == "windows":
@@ -388,7 +388,7 @@ class Explorer:
         for menu in self.menus:
             try:
                 if menu.winfo_exists():
-                    menu.destroy_custom()
+                    menu.destroy()
             except tk.TclError:
                 pass
         self.menus.clear()
@@ -440,10 +440,13 @@ class Explorer:
                 os.mkdir(dirname)
                 self.draw_dirs()
                 ret = True
+
             except FileExistsError as e:
                 showinfo("Directory alredy exists", repr(e))
+
             except PermissionError as e:
                 showinfo("Permission denied", repr(e))
+
             except (FileNotFoundError) as e:
                 showinfo("File or Directory not found", repr(e))
             return ret
@@ -466,7 +469,6 @@ class Explorer:
      888    "     888      .oP"888   888   888   888  888ooo888
      888          888     d8(  888   888   888   888  888    .o
     o888o        d888b    `Y888""8o o888o o888o o888o `Y8bod8P'
-
     """
 
     def checkifishidden(self, filepath):
@@ -481,8 +483,7 @@ class Explorer:
             except Exception as e:
                 return False
         else:  # Unix-like
-            is_hidden = os.path.basename(filepath).startswith('.')
-            return is_hidden
+            return os.path.basename(filepath).startswith('.')
 
 
     def clear_main_frame(self):
@@ -519,6 +520,9 @@ class Explorer:
         new_label.bind("<Control-x>", lambda event, dir_=dirname: self.cut_selected(dir_))
         new_label.bind("<Control-v>", lambda event, dir_=dirname: self.paste(os.getcwd()))
 
+        new_label.drop_target_register(DND_ALL)
+        new_label.dnd_bind("<<Drag>>", print)
+
     def draw_dirs_filtered(self, filter):
         self.clear_main_frame()
         global can_draw
@@ -526,6 +530,7 @@ class Explorer:
         if not(filter.strip().replace("\x08", "")):
             self.draw_dirs()
             return
+        
         elements_found = False
         for index, dir_ in enumerate(elements_found := self.app_state.search_files(filter, True, True)):
             if dir_:
@@ -540,10 +545,6 @@ class Explorer:
             self.draw_dirs()
 
     def draw_dirs(self, directories: list[str] = None, filter_condition: str = None) -> None:
-        global can_draw
-
-        can_draw = False
-        self.clear_main_frame()
         """
         params:
             directories:
@@ -551,6 +552,11 @@ class Explorer:
             filter_condition:
                 file's name and directories's name must have <filter_condition> in their name
         """
+        global can_draw
+
+        can_draw = False
+        self.clear_main_frame()
+        
 
         if directories is None or directories == []:
             directories = os.listdir()
@@ -690,36 +696,46 @@ class Explorer:
         menu.popup(x, y)
         self.destroy_all_menus()
 
-    def draw_single_disk(self, disk:dict, index):
+    def draw_single_disk(self, disk:dict, row: int, column: int, master) -> ctk.CTkFrame:
         disk_name  = disk["disk_name"]
         tot_size   = disk["tot_size"]
         used       = disk["used"]
         free       = disk["free"][:3]
         percentage = float(disk["percentage"])/100
 
-        disk_frame = ctk.CTkFrame(self.main_frame, border_color="black", border_width=3)
+        disk_frame = ctk.CTkFrame(master, border_color="black", border_width=3)
         disk_frame.bind("<Double-Button-1>", lambda x=None: self.on_double_click_entry(disk_name, checklastdot=False))
 
         disk_name_label = ctk.CTkLabel(disk_frame, text=f"{disk_name}\nFree: {free}/{tot_size}", anchor="w")
         disk_name_label.grid(row=0, column=0, padx=12, pady=12)
+        disk_name_label.bind("<Double-Button-1>", lambda x=None: self.on_double_click_entry(disk_name, checklastdot=False))
 
         disk_percentage_bar = ctk.CTkProgressBar(disk_frame)
         disk_percentage_bar.set(percentage)
         disk_percentage_bar.grid(row=2, column=0, padx=12, pady=(0, 12))
+        disk_percentage_bar.bind("<Double-Button-1>", lambda x=None: self.on_double_click_entry(disk_name, checklastdot=False))
 
-        disk_frame.grid(row=index, column=0, sticky="w")
+        disk_frame.grid(row=row, column=column, sticky="nsew", padx=12, pady=12)
+        return disk_frame
 
     def display_disks(self):
-        self.destroy_all_menus()
-        self.clear_main_frame()
         disk_info = get_disk_info()
 
-        for index, disk in enumerate(disk_info):
-            self.draw_single_disk(disk, index)
+        popup_drives = ctk.CTkToplevel(self.root)
+        popup_drives.title("Drives")
+        popup_drives.columnconfigure((0,1,2), weight=1)
+        popup_drives.rowconfigure((0,1,2), weight=1)
 
+        for index, disk in enumerate(disk_info):
+            row = index//3
+            self.draw_single_disk(disk=disk, row=row, column=index, master=popup_drives)
+
+        popup_drives.wm_attributes("-topmost", 1)
+        popup_drives.mainloop()
 
 
     def on_double_click_entry(self, dir_: str, checklastdot: bool=True) -> None:
+        logging.info(f"on_double_click_entry: {dir_}")
         last_path = os.getcwd()
         if dir_ == ".." and checklastdot:
             if os.path.abspath("..") == os.getcwd():

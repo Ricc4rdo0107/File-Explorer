@@ -43,7 +43,7 @@ def get_disk_info() -> list[dict]:
 def base64_to_pil_image(base64_str: bytes, resize:tuple =None, to_ctk_image: bool=False) -> CTkImage|Image.Image:
     image_data = base64.b64decode(base64_str)
     image = Image.open(BytesIO(image_data))
-    if resize:
+    if resize and image.size != resize:
         image.resize(resize, Image.LANCZOS)
     if to_ctk_image:
         image = CTkImage(image)

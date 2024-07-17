@@ -4,7 +4,7 @@
         "mountpoint": "C:\\"
     },
     "ftp_server":{
-        "host": "localhost",
+        "host": "192.168.1.6",
         "port":"21",
         "username": "root",
         "password": "12345",
