@@ -53,7 +53,7 @@ class AppState:
                 for path, cache in self.system_cache.copy().items():
                     for file_name, cached_paths in cache.copy().items():
                         for cached_path in cached_paths:
-                            if filename.lower() in cached_path['file_path'].lower().split("\\")[-1]:
+                            if filename.lower() in cached_path['file_path'].lower().split("\\")[-1]:# todo make this split unix system compatible
                                 if os.path.isdir(filename) and exclude_dirs:
                                     continue
                                 if dirfirst and os.path.isdir(cached_path["file_path"]):

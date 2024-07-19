@@ -12,8 +12,8 @@ from threading import Thread, Lock
 #EXTERNAL
 import customtkinter as ctk
 from tkinter import BooleanVar
-from tkinterdnd2 import DND_ALL
 from tkinter.messagebox import showinfo
+from tkinterdnd2 import DND_ALL, DND_FILES
 from shutil import rmtree, copy, copytree, move
 from external_modules.assets64 import (dll_icon, file_icon, folder_icon, 
                                        image_icon, python_icon, txt_icon,
@@ -223,22 +223,24 @@ class Explorer:
         self.arrow_menu.grid(row=1, column=0, sticky="nsew")
 
 
-        # SHOW HIDDEN CHECKBOX
+
+        ## SHOW HIDDEN CHECKBOX
         global show_hidden
-        show_hidden = BooleanVar(value=False)
-        self.show_hidden_checkbox = ctk.CTkCheckBox(self.arrow_menu.widgetsFrame, text="Show Hidden",
-                                                    variable=show_hidden, onvalue=True, offvalue=False,
-                                                    command=lambda x=None: self.draw_dirs([ x for x in os.listdir() ]))
-        self.show_hidden_checkbox.grid(row=0, column=0, pady=12, padx=12)
+        show_hidden = True
+
+        self.show_hidden_checkbox = ctk.CTkButton(self.arrow_menu.widgetsFrame, text="Show Hidden",
+                                                command=lambda x=None: self.draw_dirs([ x for x in os.listdir() ], show_hidden_switched=True))
+        self.show_hidden_checkbox.grid(row=0, column=0, pady=12, padx=(12, 5))
         
         # DRIVES DISPLAYER
         self.display_disks_button = ctk.CTkButton(self.arrow_menu.widgetsFrame, bg_color="transparent",
                                                 text="Display Drives", command=self.display_disks)
-        self.display_disks_button.grid(row=0, column=1, pady=12, padx=12)
+        self.display_disks_button.grid(row=0, column=1, pady=12, padx=0)
 
+        # SWITCH SEARCH MODE
         self.switch_search_mode_button = ctk.CTkButton(self.arrow_menu.widgetsFrame, text="Switch Search Mode",
                                                        command=self.switch_search_mode)
-        self.switch_search_mode_button.grid(row=0, column=2, padx=12, pady=12)
+        self.switch_search_mode_button.grid(row=0, column=2, pady=12, padx=(5, 12))
 
         # BARS FRAME
         self.search_frame = ctk.CTkFrame(self.root)
@@ -337,7 +339,7 @@ class Explorer:
         abspath = event.data
         name = os.path.split(abspath)[1]
         dst = os.getcwd()
-        print(f"I WANT TO MOVE {abspath} TO {os.path.join(dst, name)}")
+        logging.info(f"Dragged {abspath}, so moving {name} to {os.path.join(dst, name)}")
         if os.name == "nt":#Windows
             abspath = abspath.replace("/", "\\")
         try:
@@ -520,8 +522,6 @@ class Explorer:
         new_label.bind("<Control-x>", lambda event, dir_=dirname: self.cut_selected(dir_))
         new_label.bind("<Control-v>", lambda event, dir_=dirname: self.paste(os.getcwd()))
 
-        new_label.drop_target_register(DND_ALL)
-        new_label.dnd_bind("<<Drag>>", print)
 
     def draw_dirs_filtered(self, filter):
         self.clear_main_frame()
@@ -544,30 +544,29 @@ class Explorer:
             showinfo("No Result Found", f"No file or directory found with {filter}")
             self.draw_dirs()
 
-    def draw_dirs(self, directories: list[str] = None, filter_condition: str = None) -> None:
-        """
-        params:
-            directories:
-                list of directories that will be displayed
-            filter_condition:
-                file's name and directories's name must have <filter_condition> in their name
-        """
+    def draw_dirs(self, directories: list[str] = None, filter_condition: str = None, show_hidden_switched: bool = None) -> None:
         global can_draw
-
         can_draw = False
+
         self.clear_main_frame()
         
-
-        if directories is None or directories == []:
+        if not(directories):
             directories = os.listdir()
 
         self.main_frame._parent_canvas.yview_moveto(0.0)
 
         if not(filter_condition is None or filter_condition.isspace()) and filter_condition:
             directories = list(filter(lambda x: filter_condition.lower() in x.lower(), directories[::]))
-        
-        if not(bool(self.show_hidden_checkbox.get())):
+
+        if show_hidden_switched:
+            global show_hidden
+            show_hidden = not(show_hidden)
+
+        if not(show_hidden):
+            self.show_hidden_checkbox.configure(fg_color="#3b3b3b")
             directories = list(filter(lambda x: not(self.checkifishidden(os.path.abspath(x))), directories))
+        else:
+            self.show_hidden_checkbox.configure(fg_color=self.display_disks_button.cget("fg_color"))
 
         directories = self.sort_dir_file(directories)
 
@@ -731,6 +730,7 @@ class Explorer:
             self.draw_single_disk(disk=disk, row=row, column=index, master=popup_drives)
 
         popup_drives.wm_attributes("-topmost", 1)
+        popup_drives.resizable(0,0)
         popup_drives.mainloop()
 
 
