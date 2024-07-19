@@ -1,13 +1,14 @@
-{   
-    "explorer":{
-        "starting_path":"C:\\Users",
-        "mountpoint": "C:\\"
-    },
-    "ftp_server":{
-        "host": "",
-        "port":"21",
-        "username": "root",
-        "password": "12345",
-        "permissions": "elradfmw"
-    }
+{
+  "explorer": {
+    "starting_path": "C:\\Users",
+    "mountpoint": "C:\\",
+    "show_hidden": "1"
+  },
+  "ftp_server": {
+    "host": "192.168.1.6",
+    "port": "21",
+    "username": "root",
+    "password": "12345",
+    "permissions": "elradfmw"
+  }
 }

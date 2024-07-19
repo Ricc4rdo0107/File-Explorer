@@ -4,7 +4,7 @@ from io import BytesIO
 
 import customtkinter as ctk
 from customtkinter import CTkImage
-from tkinterdnd2 import TkinterDnD, DND_ALL
+from tkinterdnd2 import TkinterDnD, DND_FILES, COPY
 
 from typing import Any, Callable, Tuple
 
@@ -25,10 +25,22 @@ UP_ARROW_ICON     = ctk.CTkImage(RIGHT_ARROW_IMAGE.rotate(90, PIL.Image.NEAREST,
 DOWN_ARROW_ICON   = ctk.CTkImage(RIGHT_ARROW_IMAGE.rotate(270,PIL.Image.NEAREST, expand=1))
 
 # creds: https://stackoverflow.com/questions/75526264/using-drag-and-drop-files-or-file-picker-with-customtkinter
-class CTkDND(ctk.CTk, TkinterDnD.DnDWrapper):
+class CTkDnD(ctk.CTk, TkinterDnD.DnDWrapper):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.TkdndVersion = TkinterDnD._require(self)
+
+class CTkDnDLabel(ctk.CTkLabel):
+    def __init__(self, master: Any, width: int = 0, height: int = 28, corner_radius: int | None = None, bg_color: str | Tuple[str] = "transparent", fg_color: str | Tuple[str] | None = None, text_color: str | Tuple[str] | None = None, text_color_disabled: str | Tuple[str] | None = None, text: str = "CTkLabel", font: Tuple | ctk.CTkFont | None = None, image: CTkImage | None = None, compound: str = "center", anchor: str = "center", wraplength: int = 0, **kwargs):
+        super().__init__(master, width, height, corner_radius, bg_color, fg_color, text_color, text_color_disabled, text, font, image, compound, anchor, wraplength, **kwargs)
+        self._label.drag_source_register(1, DND_FILES)
+        self._label.dnd_bind("<<DragInitCmd>>", self._on_drag_init)
+
+    def _on_drag_init(self, event):
+        filename = event.widget.cget("text")
+        res = COPY, DND_FILES, filename
+        print(f"\n\n{res}\n{event.data}\n")
+        return res
 
 
 class CTkInputPopup(ctk.CTkToplevel):
@@ -174,6 +186,5 @@ class CTkFloatingMenu(ctk.CTkToplevel):
         elif x > self.screensize[0]-self.winsize[0]:
             x-=self.winsize[0]
 
-        self.geometry(f"{self.winsize[0]}x{self.winsize[1]-20}+{x}+{y}")
+        self.geometry(f"{x}+{y}")#{self.winsize[0]}x{self.winsize[1]-20}
         self.mainloop()
-

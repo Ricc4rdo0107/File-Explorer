@@ -4,16 +4,15 @@ import ctypes
 import platform
 import subprocess
 import tkinter as tk
-from json import load
 from time import sleep
+from json import load, dump
 from threading import Thread, Lock
 
 
 #EXTERNAL
 import customtkinter as ctk
-from tkinter import BooleanVar
+from tkinterdnd2 import DND_ALL
 from tkinter.messagebox import showinfo
-from tkinterdnd2 import DND_ALL, DND_FILES
 from shutil import rmtree, copy, copytree, move
 from external_modules.assets64 import (dll_icon, file_icon, folder_icon, 
                                        image_icon, python_icon, txt_icon,
@@ -22,7 +21,8 @@ from external_modules.assets64 import (dll_icon, file_icon, folder_icon,
                                        c_lang_icon, cpp_icon, csharp_icon)
 from external_modules.app_state import AppState, CachedPath
 from external_modules.utils import base64_to_pil_image, get_disk_info
-from external_modules.customwidgets import CTkFloatingMenu, CTkInputPopup, CTkArrowOpeningMenu, CTkDND
+from external_modules.customwidgets import (CTkFloatingMenu, CTkInputPopup, CTkArrowOpeningMenu,
+                                            CTkDnD, CTkDnDLabel)
 
 import logging
 from watchdog.observers import Observer
@@ -131,8 +131,9 @@ class Explorer:
 
         ctk.set_appearance_mode("Dark")  # Modes: "System" (standard), "Dark", "Light"
 
-        if os.path.exists(os.path.join(self.EXPLORER_ROOT, "config", "config.json")):
-            self.CONFIG_DICT = load(open(os.path.join(self.EXPLORER_ROOT, "config", "config.json"), "r"))
+        self.CONFIG_FILE_PATH = os.path.join(self.EXPLORER_ROOT, "config", "config.json")
+        if os.path.exists(self.CONFIG_FILE_PATH):
+            self.CONFIG_DICT = load(open(self.CONFIG_FILE_PATH, "r"))
             self.config_exists = True
         else:
             self.config_exists = False
@@ -185,7 +186,7 @@ class Explorer:
             self.FTP_PERMISSION  = "elradfmw"
 
         #self.root = ctk.CTk()
-        self.root = CTkDND()
+        self.root = CTkDnD()
         self.window_width = 700
         self.window_height = 700
 
@@ -226,9 +227,9 @@ class Explorer:
 
         ## SHOW HIDDEN CHECKBOX
         global show_hidden
-        show_hidden = True
+        show_hidden = False if not(self.config_exists) else int(self.CONFIG_DICT["explorer"]["show_hidden"])
 
-        self.show_hidden_checkbox = ctk.CTkButton(self.arrow_menu.widgetsFrame, text="Show Hidden",
+        self.show_hidden_checkbox = ctk.CTkButton(self.arrow_menu.widgetsFrame, text="Show Hidden", hover=False,
                                                 command=lambda x=None: self.draw_dirs([ x for x in os.listdir() ], show_hidden_switched=True))
         self.show_hidden_checkbox.grid(row=0, column=0, pady=12, padx=(12, 5))
         
@@ -349,6 +350,10 @@ class Explorer:
         self.draw_dirs()
 
     def on_exit(self, *args):
+        global show_hidden
+        with open(self.CONFIG_FILE_PATH, "w") as config_file:
+            self.CONFIG_DICT["explorer"]["show_hidden"] = str(int(show_hidden))
+            dump(self.CONFIG_DICT, config_file, indent=2)
         self.root.destroy()
         stop_cache_thread_func()
 
@@ -510,9 +515,8 @@ class Explorer:
             image = self.choose_file_icon(dirname)
 
         bg_color = self.DEFAULT_2
-        new_label = ctk.CTkLabel(self.main_frame, text=dirname, compound="left", bg_color=bg_color, anchor="w",
-                                 image=image,
-                                 font=(self.DEFAULT_FONT_FAMILY, 13))
+        new_label = CTkDnDLabel(self.main_frame, text=dirname, compound="left", bg_color=bg_color, anchor="w",
+                                image=image, font=(self.DEFAULT_FONT_FAMILY, 13))
         new_label.grid(row=index, column=0, sticky="ew")
         new_label.bind("<Double-Button-1>", lambda event, dir_=dirname: self.on_double_click_entry(dir_))
         new_label.bind("<Button-3>",        lambda event, dir_=dirname, widget=new_label: self.on_right_click_dir(event, widget, dir_))
@@ -563,7 +567,7 @@ class Explorer:
             show_hidden = not(show_hidden)
 
         if not(show_hidden):
-            self.show_hidden_checkbox.configure(fg_color="#3b3b3b")
+            self.show_hidden_checkbox.configure(fg_color="#6e1313")
             directories = list(filter(lambda x: not(self.checkifishidden(os.path.abspath(x))), directories))
         else:
             self.show_hidden_checkbox.configure(fg_color=self.display_disks_button.cget("fg_color"))
